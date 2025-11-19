@@ -69,13 +69,60 @@ padroes = {
 }
 
 palavras_secao = {
-    "prestador": ["prestador", "emitente"],
-    "tomador": ["tomador", "destinatário", "cliente"]
+    "prestador": ["prestador", "emitente", "vendedor", "dados do emitente"],
+    "tomador": ["tomador", "destinatário", "cliente", "comprador", "dados do destinatário"]
 }
 
 palavras_campos = {
-    "razao_social": ["razão social", "nome/razão social", "nome do prestador", "nome fantasia", "nome social", "nome"],
-    "endereco": ["endereço", "logradouro", "localização"]
+    "razao_social": [
+        "nome/razão social", "razão social", "nome do prestador", "nome do emitente"
+    ],
+    "nome_fantasia" : [
+        "nome fantasia", "nome"
+    ],
+    "endereco": [
+        "endereço", "logradouro", "localização", "município", "bairro"
+    ],
+    "inscricao_municipal": [
+        "inscrição municipal", "insc. municipal", " im ", "ccm"
+    ],
+    "inscricao_estadual": [
+        "inscrição estadual", "insc. estadual", " ie "
+    ],
+    "vencimento": [
+        "data de vencimento", "data vencimento", "vencimento", "venc.", "vcto", "validade", "válido"
+    ],
+    "valor_total": [
+        "valor total da nota", "valor total", "valor líquido", 
+        "valor a pagar", "total nota"
+    ],
+    "desconto": [
+        "desconto", "dsct", "dsc"
+    ],
+    "iss": [
+        "iss", "issqn", "i.s.s"
+    ],
+    "icms": [
+        "icms", "v. icms", "valor do icms"
+    ],
+    "ipi": [
+        "ipi", "v. ipi"
+    ],
+    "icms-st": [
+        "icms st", "subst", "substituição"
+    ],
+    "csll": [
+        "csll", "c.s.l.l"
+    ],
+    "cofins": [
+        "cofins", "pis/paesp", "p.i.s"
+    ],
+    "irrf": [
+        "irrf", "ir", "i.r", "ir retido", "i.r retido", "i.r. retido"
+    ],
+    "inss": [
+        "inss", "previdencia", "i.n.n.s"
+    ]
 }
 
 dados_extraidos = {
