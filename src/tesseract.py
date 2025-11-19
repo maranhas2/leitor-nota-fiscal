@@ -1,7 +1,7 @@
 import pytesseract
 import cv2
 import re
-
+import json
 from pdf2image import convert_from_path
 
 pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'  
@@ -58,7 +58,7 @@ palavras_secao = {
 }
 
 palavras_campos = {
-    "razao_social": [
+    "nome": [
         "nome/razão social", "razão social", "nome do prestador", "nome do emitente"
     ],
     "nome_fantasia" : [
@@ -124,12 +124,7 @@ for lista in palavras_secao.values():
     todas_chaves.extend(lista)
 todas_chaves.extend(["cnpj", "cpf", "fone", "cep", "insc est", "ie"])
 
-dados_extraidos = {
-    "prestador": {},
-    "tomador": {},
-    "impostos": {},
-    "outros": {}
-}
+dados_extraidos = {}
 
 def limpar_prefixo(linha, chave_detectada):
     chave_segura = re.escape(chave_detectada)
@@ -146,25 +141,35 @@ def limpar_sufixo(valor):
     return valor.strip()
 
 def adicionar_dado(contexto, chave, valor):
-    valor = valor.strip(" .:-_")
+    valor = valor.strip(" .:-_=()><+")
     if not valor: return
 
-    destino = contexto
+    if chave == "telefone":
+        apenas_numeros = re.sub(r"\D", "", valor)
+        if len(apenas_numeros) == 10:
+            valor = f"({apenas_numeros[:2]}) {apenas_numeros[2:6]}-{apenas_numeros[6:]}"
+        elif len(apenas_numeros) == 11:
+            valor = f"({apenas_numeros[:2]}) {apenas_numeros[2:7]}-{apenas_numeros[7:]}"
+        elif len(apenas_numeros) > 0:
+             valor = apenas_numeros 
 
-    if chave in campos_impostos:
-        destino = "impostos"
-    elif chave in campos_outros:
-        destino = "outros"
-    
-    if destino is None:
+    if chave == "vencimento" and not re.search(r'\d', valor):
         return 
 
-    if chave not in dados_extraidos[destino]:
-        dados_extraidos[destino][chave] = []
+    chave_final = chave # Default
+    if chave in campos_impostos or chave in campos_outros:
+        chave_final = chave
+    elif contexto:
+        chave_final = f"{chave}_{contexto}"
+    
+    else:
+        chave_final = chave
 
-    if valor not in dados_extraidos[destino][chave]:
-        dados_extraidos[destino][chave].append(valor)
+    if chave_final not in dados_extraidos:
+        dados_extraidos[chave_final] = []
 
+    if valor not in dados_extraidos[chave_final]:
+        dados_extraidos[chave_final].append(valor)
 
 
 contexto_atual = None 
