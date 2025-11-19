@@ -60,12 +60,12 @@ import json
 
 # --- CONFIGURAÇÕES ---
 padroes = {
-    # Nota: Coloquei todos como listas para facilitar o loop, mesmo os que tinham um só
     "cnpj": [r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}"], 
     "cpf": [r"\d{3}\.\d{3}\.\d{3}-\d{2}"],
     "email": [r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"],
     "telefone": [r"\(?\d{2}\)?\s*?\d{4,5}-?\d{4}"],
-    "nf-e": [r'\b(?:\d[\s.]*){44}\b']
+    "nf-e": [r'\b(?:\d[\s.]*){44}\b'],
+    "cep": [r"\d{5}\-\d{3}"]
 }
 
 palavras_secao = {
@@ -193,7 +193,8 @@ def limpar_e_extrair(linha, chave_detectada):
     Remove tudo que vem ANTES da chave detectada na linha.
     Ex: 'Município: SP Endereço: Rua A' -> Detecta 'Endereço' -> Retorna 'Rua A'
     """
-    pattern = rf".*?{chave_detectada}[:\s]*"
+    chave_segura = re.escape(chave_detectada)
+    pattern = rf"^.*?{chave_segura}[^:]*:?\s*"
     # count=1 garante que removemos apenas a primeira ocorrência (o prefixo)
     valor = re.sub(pattern, "", linha, count=1, flags=re.IGNORECASE).strip()
     return valor
@@ -214,7 +215,6 @@ for linha in texto_separado:
     if any(k in linha_lower for k in palavras_secao["prestador"]):
         contexto_atual = "prestador"
     elif any(k in linha_lower for k in palavras_secao["tomador"]):
-        # print(linha_limpa)
         contexto_atual = "tomador"
 
     if contexto_atual is None:
@@ -223,31 +223,23 @@ for linha in texto_separado:
     # 2. Extração via Regex (CNPJ, Email, Tel) - Padrões que não dependem de chave:valor
     for tipo_dado, lista_regex in padroes.items():
         for regex in lista_regex:
-            encontrados = re.findall(regex, linha_lower)
-            # print(encontrados, linha_limpa)
+            encontrados = re.findall(regex, linha_limpa)
             for item in encontrados:
                 adicionar_dado(contexto_atual, tipo_dado, item)
 
-    # 3. Extração de Campos de Texto (Razão Social / Endereço)
-    
-    # --- RAZÃO SOCIAL ---
-    for key in palavras_campos["razao_social"]:
-        # print(linha_limpa, key)
-        if key in linha_lower:
-            # print(key)
-            valor = limpar_e_extrair(linha_limpa, key)
-            # Verifica se sobrou algo e se não é apenas caracteres especiais soltos
-            if valor and len(valor) > 1: 
-                adicionar_dado(contexto_atual, "razao_social", valor)
-            break # Achou a chave nesta linha, para de testar outras chaves de nome
-
-    # --- ENDEREÇO ---
-    for key in palavras_campos["endereco"]:
-        if key in linha_lower:
-            valor = limpar_e_extrair(linha_limpa, key)
-            if valor and len(valor) > 1:
-                adicionar_dado(contexto_atual, "endereco", valor)
-            break
-
-# --- RESULTADO ---
+# 3. Extração de Campos de Texto
+    for tipo_dado, lista_palavras in palavras_campos.items():
+        match_encontrado_na_linha = False
+        
+        for palavra in lista_palavras:
+        
+            if re.search(rf"\b{re.escape(palavra)}\b", linha_lower):
+                valor_temp = limpar_prefixo(linha_limpa, palavra)
+                valor_final = limpar_sufixo(valor_temp)
+                
+                if len(valor_final) > 1:
+                    adicionar_dado(contexto_atual, tipo_dado, valor_final)
+                    match_encontrado_na_linha = True
+                    break
+                
 print(json.dumps(dados_extraidos, indent=4, ensure_ascii=False))
