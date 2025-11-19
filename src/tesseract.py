@@ -4,6 +4,8 @@ import re
 
 from pdf2image import convert_from_path
 
+pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'  
+
 caminho = 'imagens/NFSe_ficticia_layout_completo.pdf'
 
 if caminho[-4:] == ".pdf":
@@ -15,34 +17,48 @@ if caminho[-4:] == ".pdf":
             caminhos.append(f"{caminho[:-4]}{str(i)}.jpg")
     else:
         pages[0].save(f"{caminho[:-4]}.jpg", 'JPEG')
-        caminhos = f"{caminho[:-4]}.jpg"
+        caminhos = [f"{caminho[:-4]}.jpg"]
 elif caminho[-4:] ==".jpg" or caminho[-4:] ==".png":
-    caminhos = caminho
+    caminhos = [caminho]
 
-# Carregando a imagem
-imagem_path = caminhos  # Substitua pelo caminho da sua imagem
-imagem = cv2.imread(imagem_path)
+texto_completo = ""
+for img_path in caminhos:
+    print(caminhos)
+    print(f"Processando imagem: {img_path}")
+    imagem = cv2.imread(img_path)
 
-pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'  
+    # Verifica se a imagem carregou corretamente
+    if imagem is not None:
+        # Redimensiona para o dobro do tamanho (2x)
+        # fx=2, fy=2: Fatores de escala horizontal e vertical
+        # interpolation=cv2.INTER_CUBIC: Melhor algoritmo para qualidade ao aumentar
+        imagem_grande = cv2.resize(imagem, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
 
-# Convertendo a imagem para escala de cinza
-imagem_documento_cinza = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
+        # Exemplo: Mostrar a imagem resultante (pressione 0 para ir para a próxima)
+        # cv2.imshow("Imagem Ampliada", imagem_grande)
+        # cv2.waitKey(0) 
+        # cv2.destroyAllWindows()
+    else:
+        print(f"Erro ao carregar: {img_path}")
 
-# Aplicando binarização (thresholding)
-_, imagem_documento_binaria = cv2.threshold(imagem_documento_cinza, 128, 255, cv2.THRESH_BINARY)
+    # Pré-processamento
+    imagem_cinza = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
+    
+    # Binarização com Otsu (Geralmente melhor que valor fixo 128)
+    _, imagem_binaria = cv2.threshold(imagem_cinza, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
 
-# Aplicando um filtro para remover ruídos (opcional)
-imagem_sem_ruido = cv2.medianBlur(imagem_documento_binaria, 1)
+    # OCR
+    # --psm 3 é o padrão (Fully automatic page segmentation)
+    texto_pagina = pytesseract.image_to_string(imagem_binaria, lang='por+eng', config='--psm 3')
+    texto_completo += texto_pagina + "\n"
 
-# Ajustando o contraste (opcional)
-alpha = 1.5  # Fator de contraste
-beta = 50    # Fator de brilho
-imagem_processada = cv2.convertScaleAbs(imagem_sem_ruido, alpha=alpha, beta=beta)
+# Imprimindo o texto detectado
+# print(f'Texto Detectado: {texto_completo}')
 
-# Aplicando OCR na imagem do documento
-texto_documento = pytesseract.image_to_string(imagem_processada, lang='por')
+import re
+import json
 
-# Padrão: XX.XXX.XXX/XXXX-XX
+# --- CONFIGURAÇÕES ---
 padroes = {
     # Nota: Coloquei todos como listas para facilitar o loop, mesmo os que tinham um só
     "cnpj": [r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}"], 
@@ -94,7 +110,7 @@ def adicionar_dado(contexto, chave, valor):
 contexto_atual = None 
 
 # Simulando um texto onde pode haver múltiplos dados
-texto_separado = texto_documento.split('\n')
+texto_separado = texto_completo.split('\n')
 
 for linha in texto_separado:
     linha_limpa = linha.strip()
