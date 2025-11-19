@@ -49,7 +49,7 @@ for img_path in caminhos:
 
     # OCR
     # --psm 3 é o padrão (Fully automatic page segmentation)
-    texto_pagina = pytesseract.image_to_string(imagem_binaria, lang='por+eng', config='--psm 3')
+    texto_pagina = pytesseract.image_to_string(imagem_binaria, lang='por+eng', config='--psm 3 --psm 6')
     texto_completo += texto_pagina + "\n"
 
 # Imprimindo o texto detectado
