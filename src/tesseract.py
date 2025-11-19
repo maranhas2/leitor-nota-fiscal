@@ -125,8 +125,12 @@ palavras_campos = {
     ]
 }
 
-impostos = [
+campos_impostos = [
     "iss", "icms", "ipi", "icms-st", "csll","cofins","irrf","inss"
+]
+
+campos_outros = [
+    "vencimento", "valor_total", "desconto", "nf-e"
 ]
 
 todas_chaves = []
@@ -134,13 +138,13 @@ for lista in palavras_campos.values():
     todas_chaves.extend(lista)
 for lista in palavras_secao.values():
     todas_chaves.extend(lista)
-
 todas_chaves.extend(["cnpj", "cpf", "fone", "cep", "insc est", "ie"])
-
 
 dados_extraidos = {
     "prestador": {},
-    "tomador": {}
+    "tomador": {},
+    "impostos": {},
+    "outros": {}
 }
 
 def limpar_prefixo(linha, chave_detectada):
@@ -182,24 +186,25 @@ def adicionar_dado(contexto, chave, valor):
     valor = valor.strip(" .:-_")
     if not valor: return
 
-    if chave not in dados_extraidos[contexto]:
-        dados_extraidos[contexto][chave] = []
+    # Lógica de roteamento
+    destino = contexto # Padrão: segue o contexto atual da leitura
 
-    if valor not in dados_extraidos[contexto][chave]:
-        dados_extraidos[contexto][chave].append(valor)
+    if chave in campos_impostos:
+        destino = "impostos"
+    elif chave in campos_outros:
+        destino = "outros"
+    
+    # Se o contexto for None e não for imposto/outro, não temos onde salvar
+    if destino is None:
+        return 
 
-def limpar_e_extrair(linha, chave_detectada):
-    """
-    Remove tudo que vem ANTES da chave detectada na linha.
-    Ex: 'Município: SP Endereço: Rua A' -> Detecta 'Endereço' -> Retorna 'Rua A'
-    """
-    chave_segura = re.escape(chave_detectada)
-    pattern = rf"^.*?{chave_segura}[^:]*:?\s*"
-    # count=1 garante que removemos apenas a primeira ocorrência (o prefixo)
-    valor = re.sub(pattern, "", linha, count=1, flags=re.IGNORECASE).strip()
-    return valor
-            
-# --- PROCESSAMENTO ---
+    if chave not in dados_extraidos[destino]:
+        dados_extraidos[destino][chave] = []
+
+    if valor not in dados_extraidos[destino][chave]:
+        dados_extraidos[destino][chave].append(valor)
+
+
 
 contexto_atual = None 
 texto_separado = texto_completo.split('\n')
@@ -217,8 +222,8 @@ for linha in texto_separado:
     elif any(k in linha_lower for k in palavras_secao["tomador"]):
         contexto_atual = "tomador"
 
-    if contexto_atual is None:
-        continue
+    # Se não tem contexto ainda, mas achamos uma NF-E (que é Global), 
+    # a função adicionar_dado vai tratar corretamente jogando em "outros".
 
     # 2. Extração via Regex (CNPJ, Email, Tel) - Padrões que não dependem de chave:valor
     for tipo_dado, lista_regex in padroes.items():
@@ -229,17 +234,14 @@ for linha in texto_separado:
 
 # 3. Extração de Campos de Texto
     for tipo_dado, lista_palavras in palavras_campos.items():
-        match_encontrado_na_linha = False
-        
         for palavra in lista_palavras:
-        
+            # Verifica borda de palavra (\b) para evitar falsos positivos
             if re.search(rf"\b{re.escape(palavra)}\b", linha_lower):
                 valor_temp = limpar_prefixo(linha_limpa, palavra)
                 valor_final = limpar_sufixo(valor_temp)
                 
                 if len(valor_final) > 1:
                     adicionar_dado(contexto_atual, tipo_dado, valor_final)
-                    match_encontrado_na_linha = True
-                    break
-                
+                    break # Se achou a chave nessa linha, vai pra próxima categoria de dados
+
 print(json.dumps(dados_extraidos, indent=4, ensure_ascii=False))
