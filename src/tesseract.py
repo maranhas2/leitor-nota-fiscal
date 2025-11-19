@@ -174,7 +174,7 @@ def limpar_sufixo(valor):
             padrao_stop = re.escape(stop_word)
             # Corta tudo do começo da stop word para frente
             # O split retorna uma lista, pegamos o primeiro elemento [0]
-            valor = re.split(f"[:\s.-]{padrao_stop}", valor, flags=re.IGNORECASE)[0]
+            valor = re.split(rf"[:\s.-]{padrao_stop}", valor, flags=re.IGNORECASE)[0]
     
     return valor.strip()
 
