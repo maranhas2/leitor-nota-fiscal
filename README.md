@@ -29,3 +29,9 @@ sudo apt-get install tesseract-ocr
 #Caso queira também a versão em português
 sudo apt-get install tesseract-ocr-por
 ```
+
+Além do Tesseract, também é nessessário a instalação do poppler:
+
+```bash
+sudo apt-get install poppler-utils
+```
