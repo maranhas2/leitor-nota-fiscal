@@ -125,16 +125,67 @@ palavras_campos = {
     ]
 }
 
+impostos = [
+    "iss", "icms", "ipi", "icms-st", "csll","cofins","irrf","inss"
+]
+
+todas_chaves = []
+for lista in palavras_campos.values():
+    todas_chaves.extend(lista)
+for lista in palavras_secao.values():
+    todas_chaves.extend(lista)
+
+todas_chaves.extend(["cnpj", "cpf", "fone", "cep", "insc est", "ie"])
+
+
 dados_extraidos = {
     "prestador": {},
     "tomador": {}
 }
 
-# Funções Auxiliares
+def limpar_prefixo(linha, chave_detectada):
+    """
+    Remove a chave e o separador do início.
+    Usa regex para ser flexível com 'Nome:', 'Nome ', 'Nome-'
+    """
+    chave_segura = re.escape(chave_detectada)
+    # O pattern procura a chave no início, seguida de caracteres de separação até o valor
+    pattern = rf"^.*?{chave_segura}[^a-zA-Z0-9]*" 
+    
+    # count=1 garante que removemos apenas a ocorrência da chave
+    valor = re.sub(pattern, "", linha, count=1, flags=re.IGNORECASE).strip()
+    return valor
+
+def limpar_sufixo(valor):
+    """
+    Corta o valor caso encontre o início de outro campo (Stop Words).
+    Ex: 'João Silva Endereço: Rua X' -> Retorna apenas 'João Silva'
+    """
+    if not valor: return ""
+    
+    # Vamos varrer as chaves. Se alguma estiver DENTRO do valor, cortamos lá.
+    # Ordenamos por tamanho (maiores primeiro) para evitar cortes prematuros
+    for stop_word in sorted(todas_chaves, key=len, reverse=True):
+        # if len(stop_word) < 3: continue # Ignora chaves muito curtas pra não dar falso positivo
+        
+        # Verifica se a stop word existe no valor (case insensitive)
+        if stop_word.lower() in valor.lower():
+            # Regex para achar a posição onde começa a stop word
+            padrao_stop = re.escape(stop_word)
+            # Corta tudo do começo da stop word para frente
+            # O split retorna uma lista, pegamos o primeiro elemento [0]
+            valor = re.split(f"[:\s.-]{padrao_stop}", valor, flags=re.IGNORECASE)[0]
+    
+    return valor.strip()
+
 def adicionar_dado(contexto, chave, valor):
+    valor = valor.strip(" .:-_")
+    if not valor: return
+
     if chave not in dados_extraidos[contexto]:
         dados_extraidos[contexto][chave] = []
-    if valor and valor not in dados_extraidos[contexto][chave]:
+
+    if valor not in dados_extraidos[contexto][chave]:
         dados_extraidos[contexto][chave].append(valor)
 
 def limpar_e_extrair(linha, chave_detectada):
