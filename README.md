@@ -2,7 +2,16 @@
 
 Sistema de leitura de nota fiscal para testes em python3.12 desenvolvido em um sistema Ubuntu (Linux).
 
-# Environment 
+# Fora do Environment
+
+É necessário instalar o Tesseract:
+
+```bash
+sudo apt-get install tesseract-ocr
+sudo apt-get install tesseract-ocr-por
+```
+
+# Criar o Environment 
 
 Para iniciar, deve-se criar um environment para utilizar o projeto sem modificar seu sistema linux e instalar os pré-requisitos:
 
@@ -20,18 +29,11 @@ source .venv/bin/activate
 # Instala as dependências
 pip3 install -r requirements.txt
 ```
-# Fora do Environment
 
-Além de configurar o Ambiente, é necessário também instalar o Tesseract fora do venv:
+# Rodar o Sistema
 
-```bash
-sudo apt-get install tesseract-ocr
-#Caso queira também a versão em português
-sudo apt-get install tesseract-ocr-por
-```
-
-Além do Tesseract, também é nessessário a instalação do poppler:
+Para rodar o sistema, basta colocar este código no terminal, após entrar no Environment:
 
 ```bash
-sudo apt-get install poppler-utils
+python3 src/main.py
 ```
