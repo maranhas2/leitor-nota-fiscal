@@ -2,7 +2,7 @@
 
 Sistema de leitura de nota fiscal para testes em python3.12 desenvolvido em um sistema Ubuntu (Linux).
 
-# Fora do Environment
+# Instalações no sistema
 
 É necessário instalar o Tesseract:
 
