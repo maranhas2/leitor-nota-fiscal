@@ -1,5 +1,6 @@
 import pytesseract
 import cv2
+import os
 import re
 import json
 from pdf2image import convert_from_path
@@ -8,56 +9,61 @@ pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'
 
 caminho = 'imagens/NFSe_ficticia_layout_completo.pdf'
 
-if caminho[-4:] == ".pdf":
-    pages = convert_from_path(caminho)
-    if len(pages) > 1:
-        caminhos = []
-        for i in range(len(pages)):
-            pages[i].save(f"{caminho[:-4]}{str(i)}.jpg", 'JPEG')
-            caminhos.append(f"{caminho[:-4]}{str(i)}.jpg")
+def check_caminho(caminho):
+    if caminho[-4:] == ".pdf":
+        pages = convert_from_path(caminho)
+        if len(pages) > 1:
+            caminhos = []
+            for i in range(len(pages)):
+                pages[i].save(f"{caminho[:-4]}{str(i)}.jpg", 'JPEG')
+                caminhos.append(f"{caminho[:-4]}{str(i)}.jpg")
+        else:
+            pages[0].save(f"{caminho[:-4]}.jpg", 'JPEG')
+            caminhos = [f"{caminho[:-4]}.jpg"]
+    elif caminho[-4:] ==".jpg" or caminho[-4:] ==".png":
+        caminhos = [caminho]
     else:
-        pages[0].save(f"{caminho[:-4]}.jpg", 'JPEG')
-        caminhos = [f"{caminho[:-4]}.jpg"]
-elif caminho[-4:] ==".jpg" or caminho[-4:] ==".png":
-    caminhos = [caminho]
+        if os.path.isfile(caminho):
+            return print("O arquivo não é PNG, JPG ou PDF.")
+        else:
+            return print(f"Erro: O arquivo '{caminho}' não foi encontrado.")
+    try:
+        os.path.isfile(caminho)
+    except Exception as e:
+        return print(f"O arquivo '{caminho}' não foi encontrado. Erro: {e}")
+    return caminhos
 
-texto_completo = ""
+def leitor_texto(caminhos):
+    texto_completo = ""
+    for caminho_img in caminhos:
+        try:
+            img = cv2.imread(caminho_img)
+        except Exception as e:
+            print(f"Erro ao carrgar imagem {caminho_img}: {e}")
+        try:
+            # img_grande = cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+            imagem_cinza = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            _, imagem_binaria = cv2.threshold(imagem_cinza, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            texto_pagina = pytesseract.image_to_string(imagem_binaria, lang='por+eng', config='--psm 3 --psm 6')
+            texto_completo += texto_pagina + "\n" 
+        except Exception as e:
+            print(f"Erro ao processar imagem {caminho_img}: {e}")
+    return texto_completo
 
-for img_path in caminhos:
-    print(f"Processando imagem: {img_path}")
-    imagem = cv2.imread(img_path)
-
-    if imagem is not None:
-        imagem_grande = cv2.resize(imagem, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-    else:
-        print(f"Erro ao carregar: {img_path}")
-
-    imagem_cinza = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
-    
-    _, imagem_binaria = cv2.threshold(imagem_cinza, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-
-    texto_pagina = pytesseract.image_to_string(imagem_binaria, lang='por+eng', config='--psm 3 --psm 6')
-    texto_completo += texto_pagina + "\n"
-
-def tratar_texto_ocr(texto):
-    texto = texto.replace('\x0c', '') 
+def reparar_texto_quebrado(texto):
+    """
+    Função essencial para corrigir quebras de linha erradas do OCR.
+    Une linhas que parecem ser continuações lógicas, mas respeita cabeçalhos de seção.
+    """
+    texto = texto.replace('\x0c', '')
     texto = re.sub(r'\s*:\s*', ': ', texto)
     texto = re.sub(r':\s*\n\s*', ': ', texto)
     texto = re.sub(r'[ \t]+', ' ', texto)
+
     linhas = [linha.strip() for linha in texto.split('\n') if linha.strip()]
     
     return '\n'.join(linhas)
 
-# APLICANDO O TRATAMENTO
-print("--- Texto Original (Início) ---")
-print(texto_completo[:400]) # Debug
-texto_completo = tratar_texto_ocr(texto_completo)
-print("\n--- Texto Tratado (Início) ---")
-print(texto_completo[:400]) # Debug
-
-
-import re
-import json
 
 padroes = {
     "cnpj": [r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}"], 
@@ -133,14 +139,15 @@ campos_outros = [
     "vencimento", "valor_total", "desconto", "nf-e"
 ]
 
-todas_chaves = []
-for lista in palavras_campos.values():
-    todas_chaves.extend(lista)
-for lista in palavras_secao.values():
-    todas_chaves.extend(lista)
-todas_chaves.extend(["cnpj", "cpf", "fone", "cep", "insc est", "ie"])
+def todas_chaves(campos= palavras_campos, secao= palavras_secao):
+    todas_chaves = []
+    for lista in campos.values():
+        todas_chaves.extend(lista)
+    for lista in secao.values():
+        todas_chaves.extend(lista)
+    todas_chaves.extend(["detalhamento de valores","cnpj", "cpf", "fone", "cep", "insc est", "ie"])
+    return todas_chaves
 
-dados_extraidos = {}
 
 def limpar_prefixo(linha, chave_detectada):
     chave_segura = re.escape(chave_detectada)
@@ -148,20 +155,21 @@ def limpar_prefixo(linha, chave_detectada):
     valor = re.sub(pattern, "", linha, count=1, flags=re.IGNORECASE).strip()
     return valor
 
-def limpar_sufixo(valor):
+def limpar_sufixo(valor, chaves):
     if not valor: return ""
-    for stop_word in sorted(todas_chaves, key=len, reverse=True):
+    for stop_word in sorted(chaves, key=len, reverse=True):
         if stop_word.lower() in valor.lower():
             padrao_stop = re.escape(stop_word)
             valor = re.split(rf"[:\s.-]{padrao_stop}", valor, flags=re.IGNORECASE)[0]
     return valor.strip()
 
-def adicionar_dado(contexto, chave, valor):
-    valor = valor.strip(" .:-_=()><+")
+def adicionar_dado(contexto, chave, valor, dados, impostos, outros):
+    valor = valor.strip(" :-_=()><+")
     if not valor: return
 
     if chave == "telefone":
         apenas_numeros = re.sub(r"\D", "", valor)
+        
         if len(apenas_numeros) == 10:
             valor = f"({apenas_numeros[:2]}) {apenas_numeros[2:6]}-{apenas_numeros[6:]}"
         elif len(apenas_numeros) == 11:
@@ -172,50 +180,82 @@ def adicionar_dado(contexto, chave, valor):
     if chave == "vencimento" and not re.search(r'\d', valor):
         return 
 
-    chave_final = chave # Default
-    if chave in campos_impostos or chave in campos_outros:
+    chave_final = chave 
+    if chave in impostos or chave in outros:
         chave_final = chave
     elif contexto:
         chave_final = f"{chave}_{contexto}"
-    
     else:
         chave_final = chave
 
-    if chave_final not in dados_extraidos:
-        dados_extraidos[chave_final] = []
+    if chave_final not in dados:
+        dados[chave_final] = []
 
-    if valor not in dados_extraidos[chave_final]:
-        dados_extraidos[chave_final].append(valor)
+    if valor not in dados[chave_final]:
+        dados[chave_final].append(valor)
 
+def extract_texto(texto_bruto, dados, chaves, padroes=padroes, secao=palavras_secao, campos=palavras_campos, impostos=campos_impostos, outros=campos_outros):
+    linhas = reparar_texto_quebrado(texto_bruto).split('\n')
+    contexto_atual = "prestador" 
 
-contexto_atual = None 
-texto_separado = texto_completo.split('\n')
+    for linha in linhas:
+        linha_limpa = linha.strip()
+        linha_lower = linha.lower()
+        
+        if not linha_limpa:
+            continue
 
-for linha in texto_separado:
-    linha_limpa = linha.strip()
-    linha_lower = linha.lower()
-    
-    if not linha_limpa:
-        continue
+        # Detecta mudança de contexto
+        if any(k in linha_lower for k in secao["prestador"]):
+            contexto_atual = "prestador"
+        elif any(k in linha_lower for k in secao["tomador"]):
+            contexto_atual = "tomador"
 
-    if any(k in linha_lower for k in palavras_secao["prestador"]):
-        contexto_atual = "prestador"
-    elif any(k in linha_lower for k in palavras_secao["tomador"]):
-        contexto_atual = "tomador"
-   
-    for tipo_dado, lista_regex in padroes.items():
-        for regex in lista_regex:
-            encontrados = re.findall(regex, linha_limpa)
-            for item in encontrados:
-                adicionar_dado(contexto_atual, tipo_dado, item)
+        dados_encontrados_na_linha = []
 
-    for tipo_dado, lista_palavras in palavras_campos.items():
-        for palavra in lista_palavras:
-            if re.search(rf"\b{re.escape(palavra)}\b", linha_lower):
-                valor_temp = limpar_prefixo(linha_limpa, palavra)
-                valor_final = limpar_sufixo(valor_temp)
+        for tipo_dado, lista_palavras in campos.items():
+            for palavra in lista_palavras:
+                if re.search(rf"\b{re.escape(palavra)}\b", linha_lower):
+                    valor_temp = limpar_prefixo(linha_limpa, palavra)
+                    valor_final = limpar_sufixo(valor_temp, chaves)
+                    
+                    if tipo_dado == "email" and " " in valor_final:
+                        valor_final = valor_final.split(" ")[0]
+                    
+                    if len(valor_final) > 1:
+                        adicionar_dado(contexto_atual, tipo_dado, valor_final, 
+                                     dados=dados, impostos=impostos, outros=outros)
+                        dados_encontrados_na_linha.append(tipo_dado)
+                        break 
+
+        for tipo_dado, lista_regex in padroes.items():
+            if tipo_dado in dados_encontrados_na_linha:
+                continue
                 
-                if len(valor_final) > 1:
-                    adicionar_dado(contexto_atual, tipo_dado, valor_final)
-                    break 
-print(json.dumps(dados_extraidos, indent=4, ensure_ascii=False))
+            for regex in lista_regex:
+                encontrados = re.findall(regex, linha_limpa)
+                for item in encontrados:
+                    adicionar_dado(contexto_atual, tipo_dado, item, 
+                                 dados=dados, impostos=impostos, outros=outros)
+
+    return dados
+
+if __name__ == "__main__":
+    caminho_arquivo = 'imagens/NFSe_ficticia_layout_3_paginas1.jpg'
+
+    print(f"--- Iniciando processamento de: {caminho_arquivo} ---")
+
+    lista_imagens = check_caminho(caminho_arquivo)
+
+    if lista_imagens:
+        texto_extraido = leitor_texto(lista_imagens)
+
+        dados_dict = {}
+        lista_chaves_bloqueio = todas_chaves()
+
+        resultado = extract_texto(texto_extraido, dados_dict, lista_chaves_bloqueio)
+
+        print("\n--- JSON Resultado ---")
+        print(json.dumps(resultado, indent=4, ensure_ascii=False))
+    else:
+        print("Não foi possível processar o arquivo.")
