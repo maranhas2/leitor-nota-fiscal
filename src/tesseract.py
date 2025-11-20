@@ -39,6 +39,22 @@ for img_path in caminhos:
     texto_pagina = pytesseract.image_to_string(imagem_binaria, lang='por+eng', config='--psm 3 --psm 6')
     texto_completo += texto_pagina + "\n"
 
+def tratar_texto_ocr(texto):
+    texto = texto.replace('\x0c', '') 
+    texto = re.sub(r'\s*:\s*', ': ', texto)
+    texto = re.sub(r':\s*\n\s*', ': ', texto)
+    texto = re.sub(r'[ \t]+', ' ', texto)
+    linhas = [linha.strip() for linha in texto.split('\n') if linha.strip()]
+    
+    return '\n'.join(linhas)
+
+# APLICANDO O TRATAMENTO
+print("--- Texto Original (Início) ---")
+print(texto_completo[:400]) # Debug
+texto_completo = tratar_texto_ocr(texto_completo)
+print("\n--- Texto Tratado (Início) ---")
+print(texto_completo[:400]) # Debug
+
 
 import re
 import json
