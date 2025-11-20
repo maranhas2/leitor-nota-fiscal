@@ -32,7 +32,7 @@ pip3 install -r requirements.txt
 
 # Rodar o Sistema
 
-Para rodar o sistema, basta colocar este código no terminal, após entrar no Environment:
+Para rodar o sistema, basta colocar este código no terminal após entrar no Environment e enviar o caminho do arquivo a ser lido:
 
 ```bash
 python3 src/main.py
