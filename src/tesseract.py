@@ -5,9 +5,8 @@ import re
 import json
 from pdf2image import convert_from_path
 
-pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'  
+pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'
 
-caminho = 'imagens/NFSe_ficticia_layout_completo.pdf'
 
 def check_caminho(caminho):
     if caminho[-4:] == ".pdf":
@@ -41,7 +40,6 @@ def leitor_texto(caminhos):
         except Exception as e:
             print(f"Erro ao carrgar imagem {caminho_img}: {e}")
         try:
-            # img_grande = cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
             imagem_cinza = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             _, imagem_binaria = cv2.threshold(imagem_cinza, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
             texto_pagina = pytesseract.image_to_string(imagem_binaria, lang='por+eng', config='--psm 3 --psm 6')
@@ -60,9 +58,27 @@ def reparar_texto_quebrado(texto):
     texto = re.sub(r':\s*\n\s*', ': ', texto)
     texto = re.sub(r'[ \t]+', ' ', texto)
 
-    linhas = [linha.strip() for linha in texto.split('\n') if linha.strip()]
-    
-    return '\n'.join(linhas)
+    linhas = [l.strip() for l in texto.split('\n') if l.strip()]
+    linhas_processadas = []
+
+    inicio_secao = [
+        "dados do prestador", "dados do tomador", "discriminação dos serviços",
+        "prestador de serviços", "tomador de serviços"
+    ]
+
+    for linha in linhas:
+        linha_lower = linha.lower()
+        
+        e_inicio_secao = any(k in linha_lower for k in inicio_secao)
+        
+        e_novo_campo = (':' in linha) or (re.match(r'^\d{2}[/.]\d{2}', linha)) or e_inicio_secao
+        
+        if linhas_processadas and not e_novo_campo:
+            linhas_processadas[-1] += " " + linha
+        else:
+            linhas_processadas.append(linha)
+
+    return list(linhas_processadas)
 
 
 padroes = {
@@ -85,6 +101,12 @@ palavras_campos = {
     ],
     "nome_fantasia" : [
         "nome fantasia", "nome"
+    ],
+    "telefone": [
+        "telefone", "tel.", "celular", "fone"
+    ],
+    "email": [
+        "email", "e-mail"
     ],
     "endereco": [
         "endereço", "logradouro", "localização", "município", "bairro"
@@ -148,7 +170,6 @@ def todas_chaves(campos= palavras_campos, secao= palavras_secao):
     todas_chaves.extend(["detalhamento de valores","cnpj", "cpf", "fone", "cep", "insc est", "ie"])
     return todas_chaves
 
-
 def limpar_prefixo(linha, chave_detectada):
     chave_segura = re.escape(chave_detectada)
     pattern = rf"^.*?{chave_segura}[^a-zA-Z0-9]*" 
@@ -195,7 +216,12 @@ def adicionar_dado(contexto, chave, valor, dados, impostos, outros):
         dados[chave_final].append(valor)
 
 def extract_texto(texto_bruto, dados, chaves, padroes=padroes, secao=palavras_secao, campos=palavras_campos, impostos=campos_impostos, outros=campos_outros):
-    linhas = reparar_texto_quebrado(texto_bruto).split('\n')
+    if isinstance(texto_bruto, str):
+        linhas = reparar_texto_quebrado(texto_bruto)
+    else:
+        texto_unido = '\n'.join(texto_bruto)
+        linhas = reparar_texto_quebrado(texto_unido)
+
     contexto_atual = "prestador" 
 
     for linha in linhas:
@@ -205,7 +231,6 @@ def extract_texto(texto_bruto, dados, chaves, padroes=padroes, secao=palavras_se
         if not linha_limpa:
             continue
 
-        # Detecta mudança de contexto
         if any(k in linha_lower for k in secao["prestador"]):
             contexto_atual = "prestador"
         elif any(k in linha_lower for k in secao["tomador"]):
@@ -241,21 +266,30 @@ def extract_texto(texto_bruto, dados, chaves, padroes=padroes, secao=palavras_se
     return dados
 
 if __name__ == "__main__":
-    caminho_arquivo = 'imagens/NFSe_ficticia_layout_3_paginas1.jpg'
 
-    print(f"--- Iniciando processamento de: {caminho_arquivo} ---")
+    arquivo_default = 'imagens/NFSe_ficticia_layout_3_paginas1.jpg'
 
-    lista_imagens = check_caminho(caminho_arquivo)
+    print("(Caso queira testar com arquivo genérico, aperte ENTER) \nInsira aqui o caminho para o seu arquivo:")
+    caminho = str(input())
 
-    if lista_imagens:
-        texto_extraido = leitor_texto(lista_imagens)
+    if caminho == "":
+        caminho = arquivo_default
 
-        dados_dict = {}
-        lista_chaves_bloqueio = todas_chaves()
+    caminhos = check_caminho(caminho)
+    if caminhos:
+        texto_completo = leitor_texto(caminhos)
 
-        resultado = extract_texto(texto_extraido, dados_dict, lista_chaves_bloqueio)
+        lista_chaves = todas_chaves()
 
-        print("\n--- JSON Resultado ---")
-        print(json.dumps(resultado, indent=4, ensure_ascii=False))
+        dados_extraidos = {}
+
+        # Extração
+        dados_extraidos = extract_texto(
+            texto_bruto=texto_completo, 
+            dados=dados_extraidos, 
+            chaves=lista_chaves
+        )
+
+        print(json.dumps(dados_extraidos, indent=4, ensure_ascii=False))
     else:
         print("Não foi possível processar o arquivo.")
